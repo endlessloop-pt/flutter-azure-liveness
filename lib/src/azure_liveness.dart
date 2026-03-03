@@ -9,7 +9,7 @@ import 'liveness_result.dart';
 /// Azure Face service **before** calling this method, and for querying the
 /// service **after** to retrieve the final `livenessDecision`.
 class AzureLiveness {
-  AzureLiveness._();
+  AzureLiveness._(); // coverage:ignore-line
 
   static const _channel = MethodChannel('azure_liveness');
 
