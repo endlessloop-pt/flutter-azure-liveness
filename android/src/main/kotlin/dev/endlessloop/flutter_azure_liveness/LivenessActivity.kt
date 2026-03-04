@@ -65,8 +65,9 @@ class LivenessActivity : ComponentActivity() {
                 },
                 onError = { error: LivenessDetectionError ->
                     finishWithError(
-                        errorCode = error.kind.name,
-                        errorMessage = error.message,
+                        errorCode = error.livenessError.name,
+                        errorMessage = error.recognitionError?.name ?:
+         error.livenessError.name,
                     )
                 },
             )
