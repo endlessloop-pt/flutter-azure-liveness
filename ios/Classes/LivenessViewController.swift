@@ -16,6 +16,30 @@ struct LivenessError: Error {
     let errorMessage: String?
 }
 
+// MARK: - SwiftUI container
+
+/// Wraps `FaceLivenessDetectorView` with the Binding-based API introduced in v1.4.7.
+private struct LivenessContainerView: View {
+    let sessionToken: String
+    let verifyImageData: Data?
+    let onResult: (LivenessDetectionResult) -> Void
+
+    @State private var result: LivenessDetectionResult?
+
+    var body: some View {
+        FaceLivenessDetectorView(
+            result: $result,
+            sessionAuthorizationToken: sessionToken,
+            verifyImageFileContent: verifyImageData
+        )
+        .onChange(of: result, perform: { newResult in
+            if let newResult = newResult {
+                onResult(newResult)
+            }
+        })
+    }
+}
+
 // MARK: - LivenessViewController
 
 /// A UIViewController that embeds `FaceLivenessDetectorView` (SwiftUI) from the
@@ -43,26 +67,26 @@ class LivenessViewController: UIViewController {
     // MARK: - Private
 
     private func embedLivenessView() {
-        let hostingController = UIHostingController(rootView:
-            FaceLivenessDetectorView(
-                sessionAuthorizationToken: sessionToken,
-                verifyImageFileContent: verifyImageData,
-                onSuccess: { [weak self] success in
-                    self?.completion?(.success(LivenessSuccess(
-                        digest: success.digest,
-                        resultId: success.resultId
-                    )))
-                    self?.dismiss(animated: true)
-                },
-                onError: { [weak self] error in
-                    self?.completion?(.failure(LivenessError(
-                        errorCode: error.kind.rawValue,
-                        errorMessage: error.message
-                    )))
-                    self?.dismiss(animated: true)
-                }
-            )
-        )
+        let containerView = LivenessContainerView(
+            sessionToken: sessionToken,
+            verifyImageData: verifyImageData
+        ) { [weak self] sdkResult in
+            switch sdkResult {
+            case .success(let success):
+                self?.completion?(.success(LivenessSuccess(
+                    digest: success.digest,
+                    resultId: success.resultId
+                )))
+            case .failure(let error):
+                self?.completion?(.failure(LivenessError(
+                    errorCode: String(describing: error.livenessError),
+                    errorMessage: error.livenessError.localizedDescription
+                )))
+            }
+            self?.dismiss(animated: true)
+        }
+
+        let hostingController = UIHostingController(rootView: containerView)
         addChild(hostingController)
         hostingController.view.frame = view.bounds
         hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
