@@ -49,6 +49,12 @@ final result = await AzureLiveness.startLivenessCheck(
   sessionToken: authToken,
   verifyImageBytes: referenceImageBytes, // Uint8List
 );
+
+// Force a specific UI language
+final result = await AzureLiveness.startLivenessCheck(
+  sessionToken: authToken,
+  locale: 'pt-BR',
+);
 ```
 
 ### 3. Handle the result
@@ -96,6 +102,7 @@ Host App                Plugin                Azure Face Service
 | `sessionToken` | `String` | Yes | Auth token from Azure Face service |
 | `verifyImageBytes` | `Uint8List?` | No | Reference face image (enables liveness-with-verify) |
 | `deviceCorrelationId` | `String?` | No | Caller-supplied diagnostic identifier |
+| `locale` | `String?` | No | BCP 47 locale tag for the liveness UI (e.g. `"pt-BR"`, `"en-US"`). Defaults to the device locale when omitted. |
 
 ### `LivenessResult`
 

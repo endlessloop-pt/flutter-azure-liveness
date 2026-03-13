@@ -58,13 +58,14 @@ public class AzureLivenessPlugin: NSObject, FlutterPlugin {
 
         // verifyImageBytes is sent as FlutterStandardTypedData (Uint8List on the Dart side).
         let verifyImageData = (args["verifyImageBytes"] as? FlutterStandardTypedData)?.data
+        let locale = args["locale"] as? String
 
         pendingResult = result
 
-        presentLivenessCheck(sessionToken: sessionToken, verifyImageData: verifyImageData)
+        presentLivenessCheck(sessionToken: sessionToken, verifyImageData: verifyImageData, locale: locale)
     }
 
-    private func presentLivenessCheck(sessionToken: String, verifyImageData: Data?) {
+    private func presentLivenessCheck(sessionToken: String, verifyImageData: Data?, locale: String?) {
         guard let rootVC = findRootViewController() else {
             pendingResult?(FlutterError(
                 code: "NO_VIEW_CONTROLLER",
@@ -78,6 +79,7 @@ public class AzureLivenessPlugin: NSObject, FlutterPlugin {
         let livenessVC = LivenessViewController()
         livenessVC.sessionToken = sessionToken
         livenessVC.verifyImageData = verifyImageData
+        livenessVC.locale = locale
         livenessVC.modalPresentationStyle = .fullScreen
         livenessVC.completion = { [weak self] outcome in
             guard let self = self else { return }

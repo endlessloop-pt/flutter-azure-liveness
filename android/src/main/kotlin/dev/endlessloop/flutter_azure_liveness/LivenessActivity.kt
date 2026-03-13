@@ -1,10 +1,13 @@
 package dev.endlessloop.flutter_azure_liveness
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import java.util.Locale
 
 // Azure AI Vision Face Liveness SDK imports.
 // These are available only after the gated Maven artifact is configured.
@@ -40,6 +43,23 @@ class LivenessActivity : ComponentActivity() {
         const val RESULT_RESULT_ID = "resultId"
         const val RESULT_ERROR_CODE = "errorCode"
         const val RESULT_ERROR_MESSAGE = "errorMessage"
+
+        // Set by AzureLivenessPlugin before startActivityForResult so it is
+        // available in attachBaseContext (called before onCreate/intent is set).
+        @Volatile
+        internal var pendingLocale: String? = null
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        val locale = pendingLocale.also { pendingLocale = null }
+        if (locale != null) {
+            val localeObj = Locale.forLanguageTag(locale)
+            val config = Configuration(newBase.resources.configuration)
+            config.setLocale(localeObj)
+            super.attachBaseContext(newBase.createConfigurationContext(config))
+        } else {
+            super.attachBaseContext(newBase)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

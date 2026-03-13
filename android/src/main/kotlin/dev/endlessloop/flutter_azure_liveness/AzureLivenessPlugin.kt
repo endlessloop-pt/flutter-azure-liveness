@@ -105,6 +105,8 @@ class AzureLivenessPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
         pendingResult = result
 
+        LivenessActivity.pendingLocale = call.argument<String>("locale")
+
         val intent = Intent(currentActivity, LivenessActivity::class.java).apply {
             putExtra(LivenessActivity.EXTRA_SESSION_TOKEN, sessionToken)
             call.argument<ByteArray>("verifyImageBytes")?.let {

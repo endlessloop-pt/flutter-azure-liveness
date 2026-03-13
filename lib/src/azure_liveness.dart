@@ -21,6 +21,9 @@ class AzureLiveness {
   ///   bytes) to run in **liveness-with-verify** mode. Omit for liveness-only.
   /// - [deviceCorrelationId]: Optional. A caller-supplied identifier logged
   ///   with the session for diagnostics.
+  /// - [locale]: Optional. BCP 47 locale tag (e.g. `"pt-BR"`, `"en-US"`) or
+  ///   language code (e.g. `"pt"`) for the liveness UI. Defaults to the device
+  ///   locale when omitted.
   ///
   /// Returns a [LivenessResult] whose [LivenessResult.isSuccess] is `true` when
   /// the SDK session completed (user passed the UI flow). A `true` result does
@@ -32,11 +35,13 @@ class AzureLiveness {
     required String sessionToken,
     Uint8List? verifyImageBytes,
     String? deviceCorrelationId,
+    String? locale,
   }) async {
     final args = <String, dynamic>{
       'sessionToken': sessionToken,
       if (verifyImageBytes != null) 'verifyImageBytes': verifyImageBytes,
       if (deviceCorrelationId != null) 'deviceCorrelationId': deviceCorrelationId,
+      if (locale != null) 'locale': locale,
     };
 
     final result = await _channel.invokeMethod<Map>('startLivenessCheck', args);

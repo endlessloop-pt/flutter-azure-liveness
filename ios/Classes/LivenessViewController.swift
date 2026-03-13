@@ -22,16 +22,19 @@ struct LivenessError: Error {
 private struct LivenessContainerView: View {
     let sessionToken: String
     let verifyImageData: Data?
+    let locale: String?
     let onResult: (LivenessDetectionResult) -> Void
 
     @State private var result: LivenessDetectionResult?
 
     var body: some View {
+        let resolvedLocale = locale.map { Locale(identifier: $0) } ?? Locale.current
         FaceLivenessDetectorView(
             result: $result,
             sessionAuthorizationToken: sessionToken,
             verifyImageFileContent: verifyImageData
         )
+        .environment(\.locale, resolvedLocale)
         .onChange(of: result, perform: { newResult in
             if let newResult = newResult {
                 onResult(newResult)
@@ -54,6 +57,10 @@ class LivenessViewController: UIViewController {
     /// Optional reference image for liveness-with-verify mode.
     var verifyImageData: Data?
 
+    /// Optional BCP 47 locale tag (e.g. "pt-BR") to override the device locale
+    /// for the liveness UI. When nil, the device locale is used.
+    var locale: String?
+
     /// Called on the main thread when the liveness session ends (success or error).
     var completion: ((Result<LivenessSuccess, LivenessError>) -> Void)?
 
@@ -69,7 +76,8 @@ class LivenessViewController: UIViewController {
     private func embedLivenessView() {
         let containerView = LivenessContainerView(
             sessionToken: sessionToken,
-            verifyImageData: verifyImageData
+            verifyImageData: verifyImageData,
+            locale: locale
         ) { [weak self] sdkResult in
             switch sdkResult {
             case .success(let success):

@@ -151,6 +151,23 @@ void main() {
       expect(args['deviceCorrelationId'], 'corr-123');
     });
 
+    test('does not send locale when omitted', () async {
+      mockChannel({'success': true, 'digest': 'd', 'resultId': null});
+      await AzureLiveness.startLivenessCheck(sessionToken: 'tok');
+      final args = calls.single.arguments as Map;
+      expect(args.containsKey('locale'), isFalse);
+    });
+
+    test('sends locale when provided', () async {
+      mockChannel({'success': true, 'digest': 'd', 'resultId': null});
+      await AzureLiveness.startLivenessCheck(
+        sessionToken: 'tok',
+        locale: 'pt-BR',
+      );
+      final args = calls.single.arguments as Map;
+      expect(args['locale'], 'pt-BR');
+    });
+
     test('returns LivenessResult.success on success response', () async {
       mockChannel({'success': true, 'digest': 'B0A803', 'resultId': 'abc123'});
       final result =
