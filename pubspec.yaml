@@ -1,6 +1,6 @@
 name: flutter_azure_liveness
 description: Flutter plugin wrapping the Azure AI Vision Face Liveness UI SDK for iOS and Android.
-version: 1.0.4
+version: 1.0.5
 homepage: https://github.com/endlessloop-pt/flutter-azure-liveness
 
 environment:

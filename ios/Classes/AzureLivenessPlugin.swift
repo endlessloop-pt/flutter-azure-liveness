@@ -76,13 +76,37 @@ public class AzureLivenessPlugin: NSObject, FlutterPlugin {
             return
         }
 
+        // Resolve the locale to a full BCP-47 tag supported by the Azure SDK bundle
+        // (e.g. "pt" → "pt-PT", "fr" → "fr-FR"). This is required because:
+        // 1. The SDK's .lproj folders use region-specific identifiers (pt-PT, fr-FR, …)
+        //    with no bare "pt" or "fr" folder.
+        // 2. iOS NSBundle localisation (used internally by the SDK) is driven by
+        //    Bundle.preferredLocalizations / UserDefaults "AppleLanguages", NOT by
+        //    SwiftUI's \.locale environment value.  We therefore temporarily override
+        //    "AppleLanguages" — mirroring the Android plugin's attachBaseContext approach —
+        //    so that all NSLocalizedString calls inside the SDK pick up the right language.
+        let resolvedLocale = locale.map { expandLocale($0) }
+        let savedLanguages = UserDefaults.standard.stringArray(forKey: "AppleLanguages")
+        if let tag = resolvedLocale {
+            UserDefaults.standard.set([tag], forKey: "AppleLanguages")
+        }
+
         let livenessVC = LivenessViewController()
         livenessVC.sessionToken = sessionToken
         livenessVC.verifyImageData = verifyImageData
-        livenessVC.locale = locale
+        livenessVC.locale = resolvedLocale
         livenessVC.modalPresentationStyle = .fullScreen
         livenessVC.completion = { [weak self] outcome in
             guard let self = self else { return }
+
+            // Restore the previous preferred-language list so the rest of the
+            // app is unaffected.
+            if let saved = savedLanguages {
+                UserDefaults.standard.set(saved, forKey: "AppleLanguages")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+            }
+
             switch outcome {
             case .success(let success):
                 self.pendingResult?([
@@ -106,6 +130,35 @@ public class AzureLivenessPlugin: NSObject, FlutterPlugin {
             presenter = presented
         }
         presenter.present(livenessVC, animated: true)
+    }
+
+    /// Maps a bare BCP-47 language subtag to the best full locale identifier
+    /// available in the Azure AI Vision Face UI SDK bundle.
+    ///
+    /// The SDK ships region-specific .lproj folders (e.g. "pt-PT", "fr-FR") but
+    /// the Flutter caller typically sends only the language subtag ("pt", "fr").
+    /// iOS UserDefaults "AppleLanguages" does not fall back from bare "pt" to
+    /// "pt-PT" automatically, so we resolve the mapping explicitly here.
+    private func expandLocale(_ languageCode: String) -> String {
+        // Fast path: already contains a region subtag.
+        if languageCode.contains("-") || languageCode.contains("_") {
+            return languageCode
+        }
+        let map: [String: String] = [
+            "en": "en-GB",
+            "pt": "pt-PT",
+            "fr": "fr-FR",
+            "es": "es-ES",
+            "de": "de-DE",
+            "it": "it-IT",
+            "nl": "nl-NL",
+            "ar": "ar-SA",
+            "zh": "zh-CN",
+            "ko": "ko-KR",
+            "ja": "ja-JP",
+            "ru": "ru-RU",
+        ]
+        return map[languageCode] ?? languageCode
     }
 
     private func findRootViewController() -> UIViewController? {
