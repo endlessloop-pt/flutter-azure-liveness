@@ -2,80 +2,43 @@ import Flutter
 import UIKit
 import ObjectiveC
 
-// MARK: - Module-level state for the locale-forcing swizzle
+// MARK: - Module-level state
 
-/// Non-nil during an active liveness session: the BCP-47 tag that must be
-/// used for every `localizedString` call originating from the Azure AI Vision
-/// Face UI framework bundle.  Setting this to nil makes the swizzle a no-op.
+/// Non-nil during an active liveness session: the BCP-47 tag that the Azure SDK
+/// must use for all its localised string lookups.
+///
+/// How the Azure SDK localises strings (from binary analysis):
+///   1. Calls `Foundation.NSLocalizedString(key, bundle: Bundle.main)`.
+///      Because the main bundle has no Azure strings this always returns the key.
+///   2. On first call it lazily initialises `Strings.locale` (a `swift_once`
+///      static var) by reading `Bundle.main.preferredLocalizations.first`.
+///   3. Looks up `Localizable[Strings.locale][key]` in its pre-loaded
+///      `[String: [String: String]]` dictionary (keyed by full BCP-47 tags
+///      such as "pt-PT", "en-GB", "fr-FR" — NOT bare "pt" / "fr").
+///
+/// Therefore, to force the locale we swizzle `Bundle.preferredLocalizations`
+/// so that, while this variable is set, `Bundle.main` returns `[_azureForceLocale]`.
+/// This makes `Strings.locale` initialise to (e.g.) "pt-PT", which matches the
+/// key that exists in `Localizable`, returning the correct translated string.
 private var _azureForceLocale: String? = nil
 
-// MARK: - NSBundle swizzle
+// MARK: - Bundle.preferredLocalizations swizzle
 
 extension Bundle {
-    /// Swizzled replacement for `localizedString(forKey:value:table:)`.
+    /// Swizzled replacement for the `preferredLocalizations` property getter.
     ///
-    /// When `_azureForceLocale` is non-nil **and** the receiver is (or is a
-    /// child of) the AzureAIVisionFaceUI framework bundle, the lookup is
-    /// redirected to the matching `.lproj` sub-bundle, bypassing the SDK's
-    /// internal `Strings.locale` cached property entirely.
+    /// While `_azureForceLocale` is non-nil **and** the receiver is `Bundle.main`,
+    /// returns `[_azureForceLocale]` so the Azure SDK's `Strings.locale` static
+    /// property is initialised with the forced BCP-47 tag, which in turn drives
+    /// the `Localizable` dictionary lookup to the correct language.
     ///
-    /// For every other bundle the call passes straight through to the original
-    /// implementation (the methods have been exchanged, so calling
-    /// `azl_localizedString` here invokes the original code).
-    @objc func azl_localizedString(forKey key: String,
-                                   value: String?,
-                                   table tableName: String?) -> String {
-        guard let forceTag = _azureForceLocale else {
-            // Swizzle inactive — call through to the original implementation.
-            return azl_localizedString(forKey: key, value: value, table: tableName)
+    /// For every other bundle the original getter is called unchanged.
+    @objc var azl_preferredLocalizations: [String] {
+        if let forceTag = _azureForceLocale, self === Bundle.main {
+            return [forceTag]
         }
-
-        // Only intercept calls from the Azure AI Vision Face UI bundle.
-        let isAzureBundle = (bundleIdentifier?.lowercased().contains("azure") == true)
-                         || bundlePath.contains("AzureAIVisionFaceUI")
-
-        guard isAzureBundle else {
-            return azl_localizedString(forKey: key, value: value, table: tableName)
-        }
-
-        // Normalise to the framework root in case `self` is already a .lproj
-        // sub-bundle that the SDK loaded itself for the wrong locale.
-        let rootPath: String
-        if let lprojRange = bundlePath.range(of: ".lproj", options: .backwards) {
-            rootPath = (String(bundlePath[..<lprojRange.upperBound]) as NSString)
-                .deletingLastPathComponent
-        } else {
-            rootPath = bundlePath
-        }
-
-        // Try the full tag first (e.g. "pt-PT"), then the bare language ("pt").
-        let candidates: [String]
-        if forceTag.contains("-") || forceTag.contains("_") {
-            let lang = String(forceTag.prefix(while: { $0 != "-" && $0 != "_" }))
-            candidates = [forceTag, lang]
-        } else {
-            candidates = [forceTag]
-        }
-
-        for candidate in candidates {
-            let lprojPath = rootPath + "/\(candidate).lproj"
-            if let lprojBundle = Bundle(path: lprojPath) {
-                // Suspend interception while looking up inside the .lproj bundle
-                // to avoid infinite recursion through the swizzle.
-                _azureForceLocale = nil
-                let translated = lprojBundle.azl_localizedString(forKey: key, value: value, table: tableName)
-                _azureForceLocale = forceTag
-                if translated != key {
-                    return translated
-                }
-            }
-        }
-
-        // No locale-specific string found — pass through to the original.
-        _azureForceLocale = nil
-        let fallback = azl_localizedString(forKey: key, value: value, table: tableName)
-        _azureForceLocale = forceTag
-        return fallback
+        // Call the original implementation (methods have been exchanged).
+        return azl_preferredLocalizations
     }
 }
 
@@ -115,19 +78,22 @@ public class AzureLivenessPlugin: NSObject, FlutterPlugin {
 
     // MARK: - Private
 
-    /// Installs the NSBundle swizzle exactly once.
+    /// Installs the `Bundle.preferredLocalizations` swizzle exactly once.
     ///
-    /// After this call every invocation of `Bundle.localizedString(forKey:value:table:)`
-    /// goes through `azl_localizedString`, which can redirect Azure SDK bundle
-    /// lookups to the locale we force via `_azureForceLocale`.
+    /// After installation, every call to `Bundle.main.preferredLocalizations`
+    /// goes through `azl_preferredLocalizations`, which can force the Azure SDK
+    /// to initialise its `Strings.locale` cached property with the locale set
+    /// in `_azureForceLocale`.
     private static func installBundleSwizzle() {
         guard !swizzleInstalled else { return }
         swizzleInstalled = true
         guard
-            let orig = class_getInstanceMethod(Bundle.self,
-                #selector(Bundle.localizedString(forKey:value:table:))),
-            let swiz = class_getInstanceMethod(Bundle.self,
-                #selector(Bundle.azl_localizedString(forKey:value:table:)))
+            let orig = class_getInstanceMethod(
+                Bundle.self,
+                NSSelectorFromString("preferredLocalizations")),
+            let swiz = class_getInstanceMethod(
+                Bundle.self,
+                #selector(getter: Bundle.azl_preferredLocalizations))
         else { return }
         method_exchangeImplementations(orig, swiz)
     }
@@ -175,12 +141,13 @@ public class AzureLivenessPlugin: NSObject, FlutterPlugin {
             return
         }
 
-        // Map bare language code → full BCP-47 tag matching the SDK's .lproj names.
+        // Map bare language code → full BCP-47 tag that matches a key in the
+        // Azure SDK's Localizable dictionary (e.g. "pt" → "pt-PT").
         let resolvedLocale = locale.map { expandLocale($0) }
 
-        // Activate the NSBundle swizzle for this session so that every
-        // localizedString call from the Azure SDK bundle is served from the
-        // correct .lproj sub-bundle, bypassing the SDK's internal locale cache.
+        // Activate the Bundle.preferredLocalizations swizzle so that
+        // Strings.locale (a swift_once static inside the Azure SDK) is
+        // initialised with the correct BCP-47 tag on first access.
         _azureForceLocale = resolvedLocale
 
         let livenessVC = LivenessViewController()
@@ -191,7 +158,7 @@ public class AzureLivenessPlugin: NSObject, FlutterPlugin {
         livenessVC.completion = { [weak self] outcome in
             guard let self = self else { return }
 
-            // Deactivate the NSBundle swizzle — restore transparent behaviour.
+            // Deactivate the swizzle — restore transparent behaviour.
             _azureForceLocale = nil
 
             switch outcome {
@@ -219,11 +186,11 @@ public class AzureLivenessPlugin: NSObject, FlutterPlugin {
         presenter.present(livenessVC, animated: true)
     }
 
-    /// Maps a bare BCP-47 language subtag to the best full locale identifier
-    /// available in the Azure AI Vision Face UI SDK bundle.
+    /// Maps a bare BCP-47 language subtag to the full locale identifier used
+    /// as a key in the Azure AI Vision Face UI SDK's Localizable dictionary.
     ///
-    /// The SDK ships region-specific .lproj folders (e.g. "pt-PT", "fr-FR") but
-    /// the Flutter caller typically sends only the language subtag ("pt", "fr").
+    /// The SDK's Localizable dictionary uses region-specific keys (e.g. "pt-PT",
+    /// "fr-FR") but the Flutter caller sends only the language subtag ("pt", "fr").
     private func expandLocale(_ languageCode: String) -> String {
         // Fast path: already contains a region subtag.
         if languageCode.contains("-") || languageCode.contains("_") {
