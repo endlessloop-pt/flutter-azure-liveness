@@ -1,4 +1,4 @@
-## 1.0.4
+## 1.0.7
 
 * Add support to inform a locale to use on liveness check
 
