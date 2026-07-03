@@ -94,6 +94,18 @@ class LivenessActivity : ComponentActivity() {
         }
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        try {
+            super.onBackPressed()
+        } catch (e: RuntimeException) {
+            // Azure SDK v1.4.8 throws RuntimeException when back is pressed while
+            // a liveness session HTTP request is in-flight (race between back handler
+            // and VisionSessionJNI.sessionViewSingleShotStop). Treat as cancellation.
+            finishWithError("UserCanceled", "User cancelled liveness check")
+        }
+    }
+
     private fun finishWithSuccess(digest: String, resultId: String?) {
         val intent = Intent().apply {
             putExtra(RESULT_DIGEST, digest)
