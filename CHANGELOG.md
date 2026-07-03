@@ -1,3 +1,7 @@
+## 1.0.8
+
+* Fix (Android): catch `RuntimeException` thrown by Azure SDK v1.4.8 when the user presses Back during an active liveness session, preventing a crash. The session is now treated as user-cancelled.
+
 ## 1.0.7
 
 * Add support to inform a locale to use on liveness check
