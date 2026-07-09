@@ -1,3 +1,7 @@
+## 1.0.9
+
+* Fix (Android): catch the same `RuntimeException` when the user taps the close (X) button during an active liveness session. The close button is handled inside the Azure SDK's own UI and does not route through `onBackPressed`, so it bypassed the 1.0.8 fix; it is now caught via `dispatchTouchEvent` and treated as user-cancellation.
+
 ## 1.0.8
 
 * Fix (Android): catch `RuntimeException` thrown by Azure SDK v1.4.8 when the user presses Back during an active liveness session, preventing a crash. The session is now treated as user-cancelled.

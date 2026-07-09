@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import java.util.Locale
@@ -103,6 +104,21 @@ class LivenessActivity : ComponentActivity() {
             // a liveness session HTTP request is in-flight (race between back handler
             // and VisionSessionJNI.sessionViewSingleShotStop). Treat as cancellation.
             finishWithError("UserCanceled", "User cancelled liveness check")
+        }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        return try {
+            super.dispatchTouchEvent(ev)
+        } catch (e: RuntimeException) {
+            // Azure SDK throws the same RuntimeException as the back-press race
+            // (VisionSessionJNI.sessionViewSingleShotStop) when the close (X)
+            // button is tapped while a single-shot session is starting. The close
+            // button is handled inside the SDK's own Compose UI (onCloseButtonClick),
+            // so it never routes through onBackPressed(); the exception unwinds
+            // synchronously through dispatchTouchEvent instead. Treat as cancellation.
+            finishWithError("UserCanceled", "User cancelled liveness check")
+            true
         }
     }
 
