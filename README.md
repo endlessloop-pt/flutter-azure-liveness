@@ -65,13 +65,21 @@ changing the pin first is the safer order.
 Then commit `android/m2/` and `ios/Frameworks/`, and unset `AZ_PAT`. Keep both platforms on
 the same SDK version; a mismatch compiles fine and diverges only at runtime.
 
-After the first `pod install` in a consuming app, confirm AzureAIVisionFaceUI is embedded
-exactly once — it is a dynamic framework, and a duplicate entry in both the pod's and the
-Runner target's embed phases surfaces as a code-signing failure on release builds:
+AzureAIVisionFaceUI is a **static** framework (`ar archive`, no `LC_ID_DYLIB`) despite
+shipping as an `.xcframework`. Under `use_frameworks!` its code is linked into
+`flutter_azure_liveness.framework` rather than embedded as a framework of its own, so its
+absence from `Pods-Runner-frameworks.sh` and from `Runner.app/Frameworks/` is correct, not a
+misconfiguration — there is no embed step and no code-signing implication. After the first
+`pod install`, the wiring to expect is:
 
 ```bash
-grep -c AzureAIVisionFaceUI ios/Pods/Target\ Support\ Files/Pods-Runner/Pods-Runner-frameworks.sh
+grep OTHER_LDFLAGS ios/Pods/Target\ Support\ Files/flutter_azure_liveness/flutter_azure_liveness.debug.xcconfig
+#   OTHER_LDFLAGS = $(inherited) -framework "AzureAIVisionFaceUI"
 ```
+
+CocoaPods also generates `flutter_azure_liveness-xcframeworks.sh`, which selects the device or
+simulator slice at build time. That is what replaces the old hand-written
+`FRAMEWORK_SEARCH_PATHS` workaround.
 
 ---
 
