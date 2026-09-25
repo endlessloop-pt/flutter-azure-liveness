@@ -1,3 +1,13 @@
+## 1.0.11
+
+* Fix (iOS): ship the Azure SDK's 75 localization bundles. The vendored xcframework
+  contains a static binary, so CocoaPods links its code into
+  `flutter_azure_liveness.framework` without embedding a framework of its own — which
+  silently dropped the SDK's `.lproj` directories and left every liveness screen in
+  base-language text. They are now copied into the plugin's bundle via `s.resources`,
+  where `Bundle(for:)` resolves them. Affects 1.0.10 only; the previous Swift Package
+  Manager setup embedded the framework and its resources.
+
 ## 1.0.10
 
 * **Vendor the Azure SDK binaries — builds no longer need a Microsoft token.**

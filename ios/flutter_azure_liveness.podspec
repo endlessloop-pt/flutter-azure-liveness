@@ -61,6 +61,18 @@ Pod::Spec.new do |s|
   # Vendored Azure SDK — see header.
   s.vendored_frameworks = 'Frameworks/AzureAIVisionFaceUI.xcframework'
 
+  # The SDK ships 75 .lproj localization bundles inside its framework. Its binary is
+  # a static archive, so CocoaPods links the code into flutter_azure_liveness.framework
+  # and embeds no AzureAIVisionFaceUI.framework of its own — which means those .lproj
+  # directories would never reach the app and every liveness screen would fall back to
+  # base-language text. Copying them into this pod's bundle puts them where
+  # Bundle(for:) resolves for the statically linked SDK code.
+  #
+  # The .lproj trees are byte-identical between the device and simulator slices (only
+  # the binary and the generated Swift header differ), so sourcing them from one slice
+  # is safe and avoids duplicate-resource conflicts.
+  s.resources = 'Frameworks/AzureAIVisionFaceUI.xcframework/ios-arm64_arm64e/AzureAIVisionFaceUI.framework/*.lproj'
+
   # Flutter.framework does not contain an i386 slice.
   s.pod_target_xcconfig = {
     'DEFINES_MODULE'                      => 'YES',

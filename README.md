@@ -81,6 +81,16 @@ CocoaPods also generates `flutter_azure_liveness-xcframeworks.sh`, which selects
 simulator slice at build time. That is what replaces the old hand-written
 `FRAMEWORK_SEARCH_PATHS` workaround.
 
+Because nothing is embedded, the SDK's 75 `.lproj` localization bundles would not reach the
+app on their own. The podspec copies them in via `s.resources`, so they land in
+`flutter_azure_liveness.framework` where `Bundle(for:)` resolves them. If you ever change how
+the framework is vendored, check this still holds — missing localizations compile and link
+cleanly and only surface as untranslated liveness screens at runtime:
+
+```bash
+find build/ios/iphonesimulator/Runner.app -name Localizable.strings | wc -l   # expect 75
+```
+
 ---
 
 ## Usage
