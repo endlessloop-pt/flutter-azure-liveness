@@ -7,20 +7,71 @@ Provides a simple Dart API to launch the native liveness detection UI and receiv
 
 ---
 
-## Prerequisites
+## Vendored SDK binaries
 
-### Gated SDK access
+This plugin **vendors** the Azure AI Vision Face SDK for both platforms, so building it
+requires no Microsoft credentials on developer machines or CI.
 
-Both the iOS and Android Azure AI Vision Face Liveness SDKs are **gated artifacts** distributed
-by Microsoft. You must request access before the packages can be resolved via your Microsoft Azure contact.
+Microsoft gates the two SDKs unevenly, and vendoring is what closes the gap:
 
-### iOS
+| Platform | Public | Gated — and therefore vendored here |
+|---|---|---|
+| Android | `com.azure:azure-ai-vision-face-ui` (Maven Central) | Its mandatory transitive dep `azure-ai-vision-face-ui-assets` (native libs + models) is published **only** to Microsoft's Azure DevOps feed → mirrored into `android/m2/` |
+| iOS | The SPM repo [Azure/AzureAIVisionFaceUI](https://github.com/Azure/AzureAIVisionFaceUI) | Its `.lfsconfig` points Git LFS at `msface.visualstudio.com` → the xcframework is committed as `ios/Frameworks/AzureAIVisionFaceUI.xcframework.zip` |
 
-Follow the setup and access request instructions in the [AzureAIVisionFaceUI repository](https://github.com/Azure/AzureAIVisionFaceUI).
+The iOS archive is committed zipped (~33 MB, vs 134 MB expanded) to stay under GitHub's
+100 MB per-file limit without Git LFS. `ios/flutter_azure_liveness.podspec` expands it at
+`pod install` time; the expanded `.xcframework` is gitignored.
 
-### Android
+> The SDK is redistributable under Microsoft's licence (see `ios/Frameworks/REDIST.txt`),
+> but only for internal use. **Keep this repository private** — publishing these binaries,
+> including to pub.dev, is not permitted.
 
-Follow the setup and access request instructions in the [Azure AI Vision Face UI for Android documentation](https://azure.github.io/azure-sdk-for-android/azure-ai-vision-face-ui/index.html).
+### Consuming app setup
+
+Gradle resolves a library's transitive dependencies using the *consuming* project's
+repositories, so your app must point at the vendored mirror. In `android/build.gradle`:
+
+```groovy
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("${project(':flutter_azure_liveness').projectDir}/m2") }
+    }
+}
+```
+
+No iOS setup is needed — CocoaPods links the vendored xcframework automatically. Do **not**
+add AzureAIVisionFaceUI as a Swift Package; an `XCRemoteSwiftPackageReference` left in the
+Xcode project will resolve against the gated LFS endpoint and reintroduce the token.
+
+### Refreshing the SDK
+
+Needs an Azure DevOps PAT with read access to the `msface/SDK` `AzureAIVision` feed. This is
+the only step that uses a credential, and it is run once per upgrade by one person:
+
+Set the version in `android/build.gradle` **first**, then run the script with no
+argument so it picks that version up for both platforms:
+
+```bash
+AZ_PAT='<pat>' ./scripts/vendor-sdk.sh
+```
+
+Passing a version explicitly (`./scripts/vendor-sdk.sh 1.5.0`) is supported and warns if it
+disagrees with the pin, but it cannot tell that the pin itself is the wrong target — so
+changing the pin first is the safer order.
+
+Then commit `android/m2/` and `ios/Frameworks/`, and unset `AZ_PAT`. Keep both platforms on
+the same SDK version; a mismatch compiles fine and diverges only at runtime.
+
+After the first `pod install` in a consuming app, confirm AzureAIVisionFaceUI is embedded
+exactly once — it is a dynamic framework, and a duplicate entry in both the pod's and the
+Runner target's embed phases surfaces as a code-signing failure on release builds:
+
+```bash
+grep -c AzureAIVisionFaceUI ios/Pods/Target\ Support\ Files/Pods-Runner/Pods-Runner-frameworks.sh
+```
 
 ---
 

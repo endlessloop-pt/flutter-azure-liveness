@@ -31,3 +31,7 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 /build/
 /coverage/
+
+# Vendored Azure SDK: the .zip is committed, the expanded xcframework is generated
+# at `pod install` time by ios/flutter_azure_liveness.podspec.
+ios/Frameworks/AzureAIVisionFaceUI.xcframework/

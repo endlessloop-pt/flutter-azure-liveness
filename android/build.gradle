@@ -59,10 +59,18 @@ android {
         testImplementation("org.jetbrains.kotlin:kotlin-test")
         testImplementation("org.mockito:mockito-core:5.0.0")
 
-        // Azure AI Vision Face Liveness UI SDK (gated artifact — requires
-        // Microsoft approval and Maven Central credentials).
-        // See README for access instructions.
-        implementation("com.azure:azure-ai-vision-face-ui:+")
+        // Azure AI Vision Face Liveness UI SDK.
+        //
+        // The wrapper artifact below resolves from Maven Central (public), but its
+        // mandatory transitive dependency `azure-ai-vision-face-ui-assets` (the native
+        // libs + models) is NOT published there. It is vendored in `android/m2/` and the
+        // consuming app must declare that directory as a Maven repository:
+        //
+        //   maven { url = uri("${project(":flutter_azure_liveness").projectDir}/m2") }
+        //
+        // Keep this version in lockstep with the vendored iOS xcframework.
+        // See README "Vendored SDK binaries" for how to refresh both.
+        implementation("com.azure:azure-ai-vision-face-ui:1.5.1")
 
         // Jetpack Compose (BOM keeps versions in sync)
         def composeBom = platform("androidx.compose:compose-bom:2024.10.00")
