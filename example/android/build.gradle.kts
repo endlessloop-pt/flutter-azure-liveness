@@ -2,6 +2,8 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // Vendored Azure SDK assets artifact (see plugin README "Vendored SDK binaries").
+        maven { url = uri("${rootDir}/../../android/m2") }
     }
 }
 

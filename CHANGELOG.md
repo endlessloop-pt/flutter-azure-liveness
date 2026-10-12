@@ -1,3 +1,13 @@
+## 1.0.12
+
+* Fix (Android): exceptions thrown by the Azure SDK's liveness screen while it updates
+  (e.g. the SDK 1.5.1 `InnerAnalyzeScreen` NullPointerException) now close
+  `LivenessActivity` with error code `SdkInternalError` (message = stack trace, capped at
+  2000 chars) instead of crashing the app. `LivenessActivity` hosts the SDK under its own
+  Recomposer with a `CoroutineExceptionHandler`. Does not cover initial composition,
+  measure/layout or input dispatch. The SDK version is unchanged (1.5.1). Tracked as
+  PC-500 (gov.cv-mobile ADR `.claude/adrs/pc-500-azure-liveness-recomposer-exception-handler.md`).
+
 ## 1.0.11
 
 * Fix (iOS): ship the Azure SDK's 75 localization bundles. The vendored xcframework

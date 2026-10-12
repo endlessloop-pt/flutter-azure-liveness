@@ -5,9 +5,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.util.Log
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
+import kotlinx.coroutines.CoroutineExceptionHandler
 import java.util.Locale
 
 // Azure AI Vision Face Liveness SDK imports.
@@ -32,6 +36,10 @@ import com.azure.android.ai.vision.face.ui.LivenessDetectionSuccess
  * Extras out (set before finish()):
  *   - On success  (RESULT_OK):       [RESULT_DIGEST], [RESULT_RESULT_ID]
  *   - On failure  (RESULT_CANCELED): [RESULT_ERROR_CODE], [RESULT_ERROR_MESSAGE]
+ *
+ * Error codes set by this activity: `InvalidArguments`, `UserCanceled`, and
+ * `SdkInternalError` (an exception escaped the SDK's Compose tree during
+ * recomposition or from an effect coroutine; see [onLivenessScreenFailure]).
  */
 class LivenessActivity : ComponentActivity() {
 
@@ -44,6 +52,10 @@ class LivenessActivity : ComponentActivity() {
         const val RESULT_RESULT_ID = "resultId"
         const val RESULT_ERROR_CODE = "errorCode"
         const val RESULT_ERROR_MESSAGE = "errorMessage"
+
+        private const val TAG = "LivenessActivity"
+        private const val ERROR_SDK_INTERNAL = "SdkInternalError"
+        private const val MAX_ERROR_MESSAGE_LENGTH = 2000
 
         // Set by AzureLivenessPlugin before startActivityForResult so it is
         // available in attachBaseContext (called before onCreate/intent is set).
@@ -74,7 +86,17 @@ class LivenessActivity : ComponentActivity() {
 
         val verifyImageBytes: ByteArray? = intent.getByteArrayExtra(EXTRA_VERIFY_IMAGE_BYTES)
 
-        setContent {
+        // Compose 1.7.4: createLifecycleAwareWindowRecomposer is
+        // @ExperimentalComposeUiApi (stable in 1.9.x). Re-verify its behaviour and
+        // Recomposer.processCompositionError's rethrow semantics on Compose upgrades
+        // (see ADR pc-500).
+        @OptIn(ExperimentalComposeUiApi::class)
+        val recomposer = window.decorView.createLifecycleAwareWindowRecomposer(
+            CoroutineExceptionHandler { _, throwable -> onLivenessScreenFailure(throwable) },
+            lifecycle,
+        )
+
+        setContent(parent = recomposer) {
             FaceLivenessDetector(
                 sessionAuthorizationToken = sessionToken,
                 verifyImageFileContent = verifyImageBytes,
@@ -91,6 +113,28 @@ class LivenessActivity : ComponentActivity() {
          error.livenessError.name,
                     )
                 },
+            )
+        }
+    }
+
+    /**
+     * Receives throwables that escape the SDK's Compose tree during recomposition,
+     * applyChanges or an effect coroutine (PC-500: Azure SDK 1.5.1 NullPointerException
+     * in `AnalyzeScreenInternalKt$InnerAnalyzeScreen`). Without this handler the failed
+     * recompose coroutine reaches the thread's uncaught-exception handler and kills the
+     * process. It does not cover initial composition, measure/layout or input dispatch.
+     *
+     * Reports and closes: logs the throwable, then finishes with `SdkInternalError`.
+     * Only the first result is delivered; later throwables are logged only.
+     * May be invoked off the main thread, hence [runOnUiThread].
+     */
+    private fun onLivenessScreenFailure(throwable: Throwable) {
+        Log.e(TAG, "Liveness screen threw; closing with $ERROR_SDK_INTERNAL", throwable)
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            finishWithError(
+                ERROR_SDK_INTERNAL,
+                throwable.stackTraceToString().take(MAX_ERROR_MESSAGE_LENGTH),
             )
         }
     }

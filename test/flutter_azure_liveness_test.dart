@@ -190,6 +190,20 @@ void main() {
       expect(result.errorMessage, 'User closed the liveness screen');
     });
 
+    test('SdkInternalError failure round-trips through the channel', () async {
+      const stack = 'java.lang.NullPointerException\n\tat com.azure.Foo.bar(:422)';
+      mockChannel({
+        'success': false,
+        'errorCode': 'SdkInternalError',
+        'errorMessage': stack,
+      });
+      final result =
+          await AzureLiveness.startLivenessCheck(sessionToken: 'tok');
+      expect(result.isSuccess, isFalse);
+      expect(result.errorCode, 'SdkInternalError');
+      expect(result.errorMessage, stack);
+    });
+
     test('propagates PlatformException on channel error', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (_) async {

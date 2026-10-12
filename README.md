@@ -180,7 +180,7 @@ Host App                Plugin                Azure Face Service
 | `isSuccess` | `bool` | Always |
 | `digest` | `String?` | `isSuccess == true` |
 | `resultId` | `String?` | `isSuccess == true` |
-| `errorCode` | `String?` | `isSuccess == false` |
+| `errorCode` | `String?` | `isSuccess == false` (Android also reports `SdkInternalError` when an exception escapes the SDK's liveness screen) |
 | `errorMessage` | `String?` | `isSuccess == false` |
 
 ---
