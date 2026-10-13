@@ -204,6 +204,19 @@ void main() {
       expect(result.errorMessage, stack);
     });
 
+    test('UserBackPressed failure round-trips through the channel', () async {
+      mockChannel({
+        'success': false,
+        'errorCode': 'UserBackPressed',
+        'errorMessage': 'User pressed back',
+      });
+      final result =
+          await AzureLiveness.startLivenessCheck(sessionToken: 'tok');
+      expect(result.isSuccess, isFalse);
+      expect(result.errorCode, 'UserBackPressed');
+      expect(result.errorMessage, 'User pressed back');
+    });
+
     test('propagates PlatformException on channel error', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (_) async {

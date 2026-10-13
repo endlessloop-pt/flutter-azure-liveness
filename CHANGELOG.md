@@ -1,3 +1,13 @@
+## 1.0.13
+
+* Fix (Android): Back or swipe-back now closes the liveness screen with error code
+  `UserBackPressed` without calling into the SDK, which fixes a crash on Android 13+
+  (the SDK's Back handler calls `stopAnalyze()`, which throws if a single-shot session
+  is starting). `LivenessActivity` registers an `OnBackInvokedCallback` at
+  `PRIORITY_OVERLAY` (API 33+) and its `onBackPressed()` no longer calls `super`.
+  Back no longer produces `UserCanceled` / `USER_CANCELED_*`. The SDK version is
+  unchanged (1.5.1). Tracked as PC-483.
+
 ## 1.0.12
 
 * Fix (Android): exceptions thrown by the Azure SDK's liveness screen while it updates

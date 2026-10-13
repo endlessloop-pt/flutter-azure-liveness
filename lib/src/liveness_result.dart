@@ -17,7 +17,11 @@ class LivenessResult {
 
   // --- Failure fields ---
 
-  /// Machine-readable error code (e.g. `"UserCanceled"`, `"FaceWithMaskDetected"`).
+  /// Machine-readable error code (e.g. `"UserCanceled"`, `"UserBackPressed"`,
+  /// `"FaceWithMaskDetected"`).
+  ///
+  /// `"UserBackPressed"` (Android): the user pressed Back or swiped back; the
+  /// plugin closed the screen without calling into the SDK.
   final String? errorCode;
 
   /// Human-readable error description.

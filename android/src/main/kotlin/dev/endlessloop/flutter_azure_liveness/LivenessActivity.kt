@@ -4,9 +4,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.MotionEvent
+import android.window.OnBackInvokedDispatcher
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -37,9 +39,11 @@ import com.azure.android.ai.vision.face.ui.LivenessDetectionSuccess
  *   - On success  (RESULT_OK):       [RESULT_DIGEST], [RESULT_RESULT_ID]
  *   - On failure  (RESULT_CANCELED): [RESULT_ERROR_CODE], [RESULT_ERROR_MESSAGE]
  *
- * Error codes set by this activity: `InvalidArguments`, `UserCanceled`, and
- * `SdkInternalError` (an exception escaped the SDK's Compose tree during
- * recomposition or from an effect coroutine; see [onLivenessScreenFailure]).
+ * Error codes set by this activity: `InvalidArguments`, `UserCanceled`,
+ * `UserBackPressed` (Back or swipe-back, intercepted before the SDK sees it; see
+ * [onUserBack]) and `SdkInternalError` (an exception escaped the SDK's Compose
+ * tree during recomposition or from an effect coroutine; see
+ * [onLivenessScreenFailure]).
  */
 class LivenessActivity : ComponentActivity() {
 
@@ -55,6 +59,7 @@ class LivenessActivity : ComponentActivity() {
 
         private const val TAG = "LivenessActivity"
         private const val ERROR_SDK_INTERNAL = "SdkInternalError"
+        private const val ERROR_USER_BACK_PRESSED = "UserBackPressed"
         private const val MAX_ERROR_MESSAGE_LENGTH = 2000
 
         // Set by AzureLivenessPlugin before startActivityForResult so it is
@@ -85,6 +90,17 @@ class LivenessActivity : ComponentActivity() {
         }
 
         val verifyImageBytes: ByteArray? = intent.getByteArrayExtra(EXTRA_VERIFY_IMAGE_BYTES)
+
+        // PC-483: take Back before the SDK's own BackHandler (composed ~1 s later,
+        // and whose stopAnalyze() can throw mid-start). PRIORITY_OVERLAY outranks
+        // androidx's PRIORITY_DEFAULT callback. If the host app is not opted in to
+        // predictive back the platform rejects this registration and Back arrives
+        // through onBackPressed(), which is also ours.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+            ) { onUserBack() }
+        }
 
         // Compose 1.7.4: createLifecycleAwareWindowRecomposer is
         // @ExperimentalComposeUiApi (stable in 1.9.x). Re-verify its behaviour and
@@ -139,16 +155,23 @@ class LivenessActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Back or swipe-back (PC-483). Closes with `UserBackPressed` without calling into
+     * the SDK, so its `stopAnalyze()` (which throws if a single-shot start is in
+     * flight) is never reached from Back. No-op once a result is being delivered.
+     */
+    private fun onUserBack() {
+        if (isFinishing || isDestroyed) return
+        Log.i(TAG, "Back pressed; closing with $ERROR_USER_BACK_PRESSED")
+        finishWithError(ERROR_USER_BACK_PRESSED, "User pressed back")
+    }
+
+    // Back on non-predictive routes (Android <= 12, or a host app not opted in).
+    // The SDK's handler is bypassed on purpose, hence no super call (PC-483).
+    @Suppress("MissingSuperCall")
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        try {
-            super.onBackPressed()
-        } catch (e: RuntimeException) {
-            // Azure SDK v1.4.8 throws RuntimeException when back is pressed while
-            // a liveness session HTTP request is in-flight (race between back handler
-            // and VisionSessionJNI.sessionViewSingleShotStop). Treat as cancellation.
-            finishWithError("UserCanceled", "User cancelled liveness check")
-        }
+        onUserBack()
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
